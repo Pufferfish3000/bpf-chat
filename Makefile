@@ -15,7 +15,6 @@ lint: build
 clean:
 	rm -rf ./build
 	rm -rf ./codechecker
-	find c2/deploy -type f ! -name "*.*" -delete
 
 build-deps:
 	pip install -r requirements.txt
