@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "bpff.h"
+#include "bpfc.h"
 
 static void DisplayUsage();
 static int GetOptions(int argc, char* argv[], char** listen_port, char** forward_port,
@@ -20,7 +20,7 @@ int main(int argc, char* argv[])
         goto end;
     }
 
-    exit_code = StartBPFF();
+    exit_code = StartBPFC();
 
 end:
     return exit_code;
@@ -34,13 +34,13 @@ static void DisplayUsage()
 {
 
     printf(
-        "usage: bpff [-h] -l LISTEN_PORT -f FORWARD_PORT -a FORWARD_ADDRESS\n\n"
+        "usage: bpfc [-h] -l LISTEN_PORT -f FORWARD_PORT -a FORWARD_ADDRESS\n\n"
         "Send a shell command to the configured agent.\n\n"
         "required flags:\n"
         "  -h                  show this help message and exit\n"
-        "  -l LISTEN_PORT      Destination port bpff will filter for\n"
-        "  -f FORWARD_PORT     Port bpff will forward traffic to\n"
-        "  -a FORWARD_ADDRESS  Address bpff will forward traffic to\n");
+        "  -l LISTEN_PORT      Destination port bpfc will filter for\n"
+        "  -f FORWARD_PORT     Port bpfc will forward traffic to\n"
+        "  -a FORWARD_ADDRESS  Address bpfc will forward traffic to\n");
 }
 
 /**
@@ -48,9 +48,9 @@ static void DisplayUsage()
  * 
  * @param argc argc from main
  * @param argv argc from main
- * @param listen_port Double pointer to dst port bpff will be filtering for
- * @param forward_port Double pointer to dst port bpff will be forwarding traffic to
- * @param forward_address Double pointer to address bpff will be forwarding traffic to
+ * @param listen_port Double pointer to dst port bpfc will be filtering for
+ * @param forward_port Double pointer to dst port bpfc will be forwarding traffic to
+ * @param forward_address Double pointer to address bpfc will be forwarding traffic to
  * @return int 
  */
 static int GetOptions(int argc, char* argv[], char** listen_port, char** forward_port,
