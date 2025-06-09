@@ -14,7 +14,7 @@ def get_command_args() -> argparse.Namespace:
         description="BPF Exec Client", prog="python3 -m client"
     )
     parser.add_argument(
-        "-p", "--log-file", default="Client.log", help="Path to the log file"
+        "-L", "--log-file", default="Client.log", help="Path to the log file"
     )
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode")
     parser.add_argument(
@@ -22,6 +22,17 @@ def get_command_args() -> argparse.Namespace:
         "--dip",
         required=True,
         help="Destination IP Address of the machine you want the packet routed to",
+    )
+
+    parser.add_argument(
+        "-l",
+        "--dport",
+        required=True,
+    )
+    parser.add_argument(
+        "-p",
+        "--sport",
+        required=True,
     )
 
     parser.add_argument(

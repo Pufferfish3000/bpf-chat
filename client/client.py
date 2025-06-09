@@ -10,7 +10,7 @@ class Client:
     def __init__(self, args: argparse.Namespace, log_level: int = logging.INFO):
         self.args = args
         self.view = ClientView(log_level=log_level, logfile=args.log_file)
-        self.network = Networking(args.dip)
+        self.network = Networking(args.dip, int(args.dport), int(args.sport))
 
     def client_loop(self):
         prompt = ClientView.colored_text("BPF CHAT> ", "C9C9EE")
@@ -23,6 +23,8 @@ class Client:
 
             self.view.print_msg(f"Sending: {msg}")
             self.network.send_msg(msg)
+            recv_msg = self.network.recv_msg()
+            self.view.print_success(f"Recv msg: {recv_msg}")
 
     @staticmethod
     def _random_sentence():
