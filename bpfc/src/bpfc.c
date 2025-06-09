@@ -2,9 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-int StartBPFF()
+int StartBPFC()
 {
-    printf("Starting BPFF\n");
+    printf("Starting BPFC\n");
 
     return EXIT_SUCCESS;
 }
