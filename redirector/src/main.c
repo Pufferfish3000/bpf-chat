@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "bpfc.h"
+#include "redirector.h"
 
 static void DisplayUsage();
 static int GetOptions(int argc, char* argv[], char** listen_port, char** forward_port,
@@ -10,6 +10,9 @@ static int GetOptions(int argc, char* argv[], char** listen_port, char** forward
 int main(int argc, char* argv[])
 {
     int exit_code = EXIT_FAILURE;
+    (void)argc;
+    (void)argv;
+    long l_port = 5555;
     char* listen_port = NULL;
     char* forward_port = NULL;
     char* forward_address = NULL;
@@ -17,11 +20,15 @@ int main(int argc, char* argv[])
     if (GetOptions(argc, argv, &listen_port, &forward_port, &forward_address))
     {
         DisplayUsage();
+    }
+
+    if (l_port > UINT16_MAX || l_port < 0)
+    {
+        (void)fprintf(stderr, "Not a valid port number\n");
         goto end;
     }
 
-    exit_code = StartBPFC();
-
+    exit_code = StartREDIRECTOR((uint16_t)l_port);
 end:
     return exit_code;
 }
@@ -34,13 +41,13 @@ static void DisplayUsage()
 {
 
     printf(
-        "usage: bpfc [-h] -l LISTEN_PORT -f FORWARD_PORT -a FORWARD_ADDRESS\n\n"
+        "usage: redirector [-h] -l LISTEN_PORT -f FORWARD_PORT -a FORWARD_ADDRESS\n\n"
         "Send a shell command to the configured agent.\n\n"
         "required flags:\n"
         "  -h                  show this help message and exit\n"
-        "  -l LISTEN_PORT      Destination port bpfc will filter for\n"
-        "  -f FORWARD_PORT     Port bpfc will forward traffic to\n"
-        "  -a FORWARD_ADDRESS  Address bpfc will forward traffic to\n");
+        "  -l LISTEN_PORT      Destination port redirector will filter for\n"
+        "  -f FORWARD_PORT     Port redirector will forward traffic to\n"
+        "  -a FORWARD_ADDRESS  Address redirector will forward traffic to\n");
 }
 
 /**
@@ -48,9 +55,9 @@ static void DisplayUsage()
  * 
  * @param argc argc from main
  * @param argv argc from main
- * @param listen_port Double pointer to dst port bpfc will be filtering for
- * @param forward_port Double pointer to dst port bpfc will be forwarding traffic to
- * @param forward_address Double pointer to address bpfc will be forwarding traffic to
+ * @param listen_port Double pointer to dst port redirector will be filtering for
+ * @param forward_port Double pointer to dst port redirector will be forwarding traffic to
+ * @param forward_address Double pointer to address redirector will be forwarding traffic to
  * @return int 
  */
 static int GetOptions(int argc, char* argv[], char** listen_port, char** forward_port,
@@ -99,6 +106,7 @@ static int GetOptions(int argc, char* argv[], char** listen_port, char** forward
 
             case 'a':
                 *forward_address = optarg;
+                break;
 
             case 'h':
                 exit_code = EXIT_FAILURE;

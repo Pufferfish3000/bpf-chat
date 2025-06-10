@@ -9,16 +9,23 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "networking.h"
+
 static int CreateUDPFilterSocket(uint16_t port);
 
-int StartBPFC(uint16_t port)
+int StartREDIRECTOR(uint16_t port)
 {
     int exit_code = EXIT_FAILURE;
     int sock = -1;
 
     sock = CreateUDPFilterSocket(port);
 
-    printf("Starting BPFC\n");
+    printf("Starting REDIRECTOR\n");
+
+    if (RecvPacket(sock))
+    {
+        (void)fprintf(stderr, "Could not Recv Raw Packet\n");
+    }
 
     return exit_code;
 }
@@ -32,7 +39,7 @@ int StartBPFC(uint16_t port)
 static int CreateUDPFilterSocket(uint16_t port)
 {
     int sock = -1;
-    const int code_size = 16;
+    const short unsigned int code_size = 16;
     const int port_idx_1 = 5;
     const int port_idx_2 = 13;
 

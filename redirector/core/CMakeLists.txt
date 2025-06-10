@@ -1,4 +1,4 @@
-target_sources(${BPFC}
+target_sources(${REDIRECTOR}
     PRIVATE
     networking.c
 )
