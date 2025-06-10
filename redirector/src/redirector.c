@@ -13,7 +13,7 @@
 
 static int CreateUDPFilterSocket(uint16_t port);
 
-int StartREDIRECTOR(uint16_t port)
+int StartRedirector(uint16_t port)
 {
     int exit_code = EXIT_FAILURE;
     int sock = -1;

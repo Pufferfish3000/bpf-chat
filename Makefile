@@ -13,6 +13,7 @@ lint: build
 	firefox ./codechecker/report/index.html &
 
 clean:
+	rm -rf ./bin
 	rm -rf ./build
 	rm -rf ./codechecker
 

@@ -28,7 +28,7 @@ int main(int argc, char* argv[])
         goto end;
     }
 
-    exit_code = StartREDIRECTOR((uint16_t)l_port);
+    exit_code = StartRedirector((uint16_t)l_port);
 end:
     return exit_code;
 }

@@ -2,6 +2,8 @@
 #include <linux/filter.h>
 #include <linux/if_ether.h>
 #include <net/ethernet.h>
+#include <netinet/ip.h>
+#include <netinet/udp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +16,9 @@
 #include "networking.h"
 static int RecvAll(int sock, unsigned char** raw_bytes, size_t recv_sz);
 static int RecvEther(int sock, struct ether_header** ether);
+static int RecvIp(int sock, unsigned char** ip_header);
+static void PrintHex(const unsigned char* data, size_t length);
+
 int CreateRawFilterSocket(struct sock_fprog* bpf)
 {
     int sock = -1;
@@ -60,6 +65,12 @@ int RecvPacket(int sock)
 {
     int exit_code = EXIT_FAILURE;
     struct ether_header* ether = NULL;
+    unsigned char* ip_header = NULL;
+
+    if (RecvIp(sock, &ip_header))
+    {
+        (void)fprintf(stderr, "Could not recv ip\n");
+    }
 
     if (RecvEther(sock, &ether))
     {
@@ -79,7 +90,7 @@ end:
 static int RecvEther(int sock, struct ether_header** ether)
 {
     int exit_code = EXIT_FAILURE;
-    struct ether_header* temp_eth = NULL;
+    unsigned char* buffer = NULL;
 
     if (ether == NULL || *ether != NULL)
     {
@@ -87,20 +98,125 @@ static int RecvEther(int sock, struct ether_header** ether)
         goto end;
     }
 
-    if (RecvAll(sock, (unsigned char**)&temp_eth, sizeof(*temp_eth)))
+    if (RecvAll(sock, &buffer, 20))
     {
         (void)fprintf(stderr, "Could not RecvAll ether header\n");
-        goto clean;
+        goto end;
     }
 
-    *ether = temp_eth;
+    printf("ether\n");
+
+    PrintHex(buffer, 20);
+
+    *ether = (struct ether_header*)buffer;
     exit_code = EXIT_SUCCESS;
     goto end;
 
-clean:
-    NFREE(temp_eth);
-
 end:
+    return exit_code;
+}
+
+// static int RecvIp(int sock, unsigned char** ip_header)
+// {
+//     int exit_code = EXIT_FAILURE;
+//     const size_t min_bytes = 20;
+//     size_t remaining_bytes = 0;
+
+//     struct ip* temp_headr = NULL;
+
+//     (void)ip_header;
+
+//     unsigned char* buffer = NULL;
+
+//     if (RecvAll(sock, &buffer, min_bytes))
+//     {
+//         (void)fprintf(stderr, "Could not RecvAll first 20 bytes of IP\n");
+//         goto clean;
+//     }
+
+//     temp_headr = (struct ip*)buffer;
+//     remaining_bytes = temp_headr->ip_hl * 4;
+//     remaining_bytes = remaining_bytes - min_bytes;
+
+//     printf("Remaining bytes %ld\n", remaining_bytes);
+//     printf("IP src: %s\n", inet_ntoa(temp_headr->ip_src));
+//     printf("IP dst: %s\n", inet_ntoa(temp_headr->ip_dst));
+
+//     goto end;
+// clean:
+//     NFREE(temp_headr);
+
+// end:
+//     return exit_code;
+// }
+
+static int RecvIp(int sock, unsigned char** ip_header)
+{
+    int exit_code = EXIT_FAILURE;
+    const size_t min_bytes = 20;
+
+    unsigned char* buffer = NULL;
+
+    (void)ip_header;
+
+    if (RecvAll(sock, &buffer, 34))
+    {
+        fprintf(stderr, "Could not RecvAll first 20 bytes of IP\n");
+        goto clean;
+    }
+    printf("ip\n");
+
+    PrintHex(buffer, 34);
+
+    struct ip* temp_headr = (struct ip*)buffer + 14;
+
+    printf("iasdasdp\n");
+
+    PrintHex((unsigned char*)temp_headr, 20);
+
+    if (temp_headr->ip_v != 4)
+    {
+        fprintf(stderr, "field %d should be 4\n", temp_headr->ip_v);
+        goto clean;
+    }
+
+    if (temp_headr->ip_hl < 5)
+    {
+        fprintf(stderr, "Invalid IP header length: %d\n", temp_headr->ip_hl);
+        goto clean;
+    }
+
+    size_t full_header_len = temp_headr->ip_hl * 4;
+
+    if (full_header_len > min_bytes)
+    {
+        unsigned char* extended = realloc(buffer, full_header_len);
+        if (!extended)
+        {
+            fprintf(stderr, "Failed to realloc for full IP header\n");
+            goto clean;
+        }
+
+        ssize_t extra = recv(sock, extended + min_bytes, full_header_len - min_bytes, 0);
+        if (extra != (ssize_t)(full_header_len - min_bytes))
+        {
+            fprintf(stderr, "Failed to receive full IP header\n");
+            NFREE(extended);
+            goto clean;
+        }
+
+        buffer = extended;
+        temp_headr = (struct ip*)buffer;
+    }
+
+    printf("IP src: %s\n", inet_ntoa(temp_headr->ip_src));
+    printf("IP dst: %s\n", inet_ntoa(temp_headr->ip_dst));
+    printf("Full IP header length: %lu\n", full_header_len);
+
+    exit_code = EXIT_SUCCESS;
+
+clean:
+    NFREE(buffer);
     return exit_code;
 }
 
@@ -119,10 +235,7 @@ static int RecvAll(int sock, unsigned char** raw, size_t recv_sz)
         goto end;
     }
 
-    temp = calloc(
-        recv_sz + 1,
-        sizeof(
-            *temp));  //ensures null termination, no effect on non strings due to how packets get handled
+    temp = calloc(recv_sz, sizeof(*temp));
     if (NULL == temp)
     {
         (void)fprintf(stderr, "failed to calloc temp");
@@ -151,4 +264,21 @@ clean:
 
 end:
     return exit_code;
+}
+
+static void PrintHex(const unsigned char* data, size_t length)
+{
+    for (size_t i = 0; i < length; ++i)
+    {
+        if (i % 16 == 0)
+            printf("%04zx : ", i);
+
+        printf("%02x ", data[i]);
+
+        if ((i + 1) % 16 == 0)
+            printf("\n");
+    }
+
+    if (length % 16 != 0)
+        printf("\n");
 }
