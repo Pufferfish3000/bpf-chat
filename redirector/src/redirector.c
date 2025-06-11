@@ -10,19 +10,21 @@
 #include <unistd.h>
 
 #include "networking.h"
+#include "redirector.h"
 
 static int CreateUDPFilterSocket(uint16_t port);
 
-int StartRedirector(uint16_t port)
+int StartRedirector(uint16_t l_port, uint16_t f_port, char* f_addr, char s_addr)
 {
     int exit_code = EXIT_FAILURE;
     int sock = -1;
+    unsigned char* packet = NULL;
 
-    sock = CreateUDPFilterSocket(port);
+    sock = CreateUDPFilterSocket(l_port);
 
-    printf("Starting REDIRECTOR\n");
+    printf("Starting Redirector\n\n");
 
-    if (RecvPacket(sock))
+    if (RecvAndModifyPacket(sock, f_port, f_addr))
     {
         (void)fprintf(stderr, "Could not Recv Raw Packet\n");
     }
