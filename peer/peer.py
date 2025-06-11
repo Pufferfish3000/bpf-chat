@@ -1,25 +1,25 @@
 import argparse
-from client.networking import Networking
-from client.view import ClientView
+from peer.networking import Networking
+from peer.view import PeerView
 import random
 import logging
 import time
 
 
-class Client:
+class Peer:
     def __init__(self, args: argparse.Namespace, log_level: int = logging.INFO):
         self.args = args
-        self.view = ClientView(log_level=log_level, logfile=args.log_file)
+        self.view = PeerView(log_level=log_level, logfile=args.log_file)
         self.network = Networking(args.dip, int(args.dport), int(args.sport))
 
-    def client_loop(self):
-        prompt = ClientView.colored_text("BPF CHAT> ", "C9C9EE")
+    def peer_loop(self):
+        prompt = PeerView.colored_text("BPF CHAT> ", "C9C9EE")
 
         while True:
             if self.args.demo:
-                msg = Client._random_sentence()
+                msg = Peer._random_sentence()
             else:
-                msg = Client._prompt_user()
+                msg = Peer._prompt_user()
 
             self.view.print_msg(f"Sending: {msg}")
             self.network.send_msg(msg)
@@ -33,7 +33,7 @@ class Client:
             "puppy",
             "car",
             "rabbit",
-            "girl",
+            "doll",
             "monkey",
             "cat",
             "fish",
@@ -98,5 +98,5 @@ class Client:
 
     @staticmethod
     def _prompt_user():
-        prompt = ClientView.colored_text("BPF CHAT> ", "C9C9EE")
+        prompt = PeerView.colored_text("BPF CHAT> ", "C9C9EE")
         return input(prompt)

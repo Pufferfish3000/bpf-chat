@@ -1,20 +1,20 @@
 import argparse
 import sys
-from client.view import ClientView
+from peer.view import PeerView
 from typing import Optional, NoReturn, Any
 
 
 def get_command_args() -> argparse.Namespace:
-    """Return parsed client command line arguments
+    """Return parsed peer command line arguments
 
     Returns:
-        argparse.Namespace: Client command line arguments
+        argparse.Namespace: Peer command line arguments
     """
     parser = argparse.ArgumentParser(
-        description="BPF Exec Client", prog="python3 -m client"
+        description="BPF Exec Peer", prog="python3 -m peer"
     )
     parser.add_argument(
-        "-L", "--log-file", default="Client.log", help="Path to the log file"
+        "-L", "--log-file", default="Peer.log", help="Path to the log file"
     )
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode")
     parser.add_argument(
@@ -36,7 +36,7 @@ def get_command_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "-D", "--demo", action="store_true", help="Run client in demo mode"
+        "-D", "--demo", action="store_true", help="Run peer in demo mode"
     )
 
     return parser.parse_args()

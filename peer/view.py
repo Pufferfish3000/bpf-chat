@@ -1,14 +1,14 @@
 import logging
 
 
-class ClientView:
-    """ClientView is a class that provides methods to log messages with different severity levels"""
+class PeerView:
+    """PeerView is a class that provides methods to log messages with different severity levels"""
 
     def __init__(
         self,
-        log_name: str = "Client",
+        log_name: str = "Peer",
         log_level: int = logging.DEBUG,
-        logfile: str = "Client.log",
+        logfile: str = "Peer.log",
     ) -> None:
         self.logger = logging.getLogger(log_name)
         self.logger.setLevel(log_level)
@@ -47,7 +47,7 @@ class ClientView:
         Returns:
             str: Formatted text with ANSI escape codes.
         """
-        r, g, b = ClientView._hex_to_rgb(hex_color)
+        r, g, b = PeerView._hex_to_rgb(hex_color)
         return f"\033[38;2;{r};{g};{b}m{text}\033[0m"
 
     def write(self, msg: str) -> None:
