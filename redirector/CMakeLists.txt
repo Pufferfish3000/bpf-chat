@@ -1,6 +1,6 @@
 set(REDIRECTOR "redirector_x86_64")
 
-set(RELEASE_FLAGS -Wall -Werror -Wextra -Wpedantic -Wconversion -Wunreachable-code -Werror)
+set(RELEASE_FLAGS -Wall -Werror -Wextra -Wpedantic -Wconversion -Wunreachable-code -Werror -g)
 
 add_executable(${REDIRECTOR})
 target_compile_options(${REDIRECTOR} PUBLIC ${RELEASE_FLAGS})

@@ -6,6 +6,7 @@ build:
 
 format:
 	find . -type f \( -iname "*.c" -o -iname "*.h" \) | xargs clang-format -style=file -i
+	black .
 
 lint: build
 	@CodeChecker analyze ./build/compile_commands.json --enable sensitive --output ./codechecker

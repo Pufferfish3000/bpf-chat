@@ -26,5 +26,6 @@ def start_peer() -> None:
     except KeyboardInterrupt:
         peer.view.print_msg("Goodbye")
 
+
 if __name__ == "__main__":
     start_peer()
