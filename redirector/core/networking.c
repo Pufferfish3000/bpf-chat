@@ -16,6 +16,7 @@
 #include "networking.h"
 static ssize_t ParseEther(unsigned char* packet, ssize_t bytes_left);
 static ssize_t ParseIp(unsigned char* packet, ssize_t bytes_left);
+static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left);
 static int PrintHex(const char* label, const unsigned char* data, size_t length);
 
 int CreateRawFilterSocket(struct sock_fprog* bpf)
@@ -68,6 +69,7 @@ int RecvPacket(int sock)
     ssize_t bytes_recv = -1;
     ssize_t bytes_parsed = -1;
     ssize_t pointer = 0;
+    const char label[] = "data ";
 
     // hate doing this, but i run into many issues doing partial recvs with raw socket bpf, so
     // while I would prefer to recv ether size -> parse ether -> recv ip size etc, I cant
@@ -105,7 +107,7 @@ int RecvPacket(int sock)
 
     if (-1 == bytes_parsed)
     {
-        fprintf(stderr, "Could not parse ether header\n");
+        (void)fprintf(stderr, "Could not parse ether header\n");
         goto clean;
     }
 
@@ -116,12 +118,29 @@ int RecvPacket(int sock)
 
     if (-1 == bytes_parsed)
     {
-        fprintf(stderr, "Could not parse ip header\n");
+        (void)fprintf(stderr, "Could not parse ip header\n");
         goto clean;
     }
 
     pointer = pointer + bytes_parsed;
+    bytes_recv = bytes_recv - bytes_parsed;
 
+    bytes_parsed = ParseUdp(packet + pointer, bytes_recv);
+
+    if (-1 == bytes_parsed)
+    {
+        (void)fprintf(stderr, "Could not parse ip header\n");
+        goto clean;
+    }
+
+    pointer = pointer + bytes_parsed;
+    bytes_recv = bytes_recv - bytes_parsed;
+
+    if (bytes_recv > 0)
+    {
+        PrintHex(label, packet + pointer, (size_t)bytes_recv);
+        printf("payload: %s\n", (char*)packet + pointer);
+    }
     exit_code = EXIT_SUCCESS;
 
     goto clean;
@@ -133,8 +152,7 @@ end:
 }
 
 /**
- * @brief Parses the ethernet packet, left for functionality if later i want to change ether 
- * fields
+ * @brief Parses the ethernet header
  * 
  * @param packet pointer to the packet at the start of the ethernet
  * @param bytes_left the amount of bytes that can be parsed
@@ -167,6 +185,13 @@ end:
     return parsed_bytes;
 }
 
+/**
+ * @brief Parses the IP header
+ * 
+ * @param packet pointer to the packet at the start of IP
+ * @param bytes_left the amount of bytes that can be parsed
+ * @return ssize_t the amount of bytes actually parsed
+ */
 static ssize_t ParseIp(unsigned char* packet, ssize_t bytes_left)
 {
 
@@ -190,17 +215,17 @@ static ssize_t ParseIp(unsigned char* packet, ssize_t bytes_left)
 
     if (temp_headr->ip_v != 4)
     {
-        fprintf(stderr, "field %d should be 4\n", temp_headr->ip_v);
+        (void)fprintf(stderr, "field %d should be 4\n", temp_headr->ip_v);
         goto end;
     }
 
     if (temp_headr->ip_hl < 5)
     {
-        fprintf(stderr, "Invalid IP header length: %d\n", temp_headr->ip_hl);
+        (void)fprintf(stderr, "Invalid IP header length: %d\n", temp_headr->ip_hl);
         goto end;
     }
 
-    parsed_bytes = temp_headr->ip_hl * 4;
+    parsed_bytes = (ssize_t)temp_headr->ip_hl * 4;
 
     if (parsed_bytes > bytes_left)
     {
@@ -209,9 +234,39 @@ static ssize_t ParseIp(unsigned char* packet, ssize_t bytes_left)
     }
 
     PrintHex(label, packet, (size_t)parsed_bytes);
-    printf("IP src: %s\n", inet_ntoa(temp_headr->ip_src));
-    printf("IP dst: %s\n", inet_ntoa(temp_headr->ip_dst));
-    printf("Full IP header length: %lu\n", parsed_bytes);
+
+end:
+    return parsed_bytes;
+}
+
+/**
+ * @brief Parses the UDP header
+ * 
+ * @param packet pointer to the packet at the start of UDP
+ * @param bytes_left the amount of bytes that can be parsed
+ * @return ssize_t the amount of bytes actually parsed
+ */
+static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left)
+{
+    ssize_t parsed_bytes = -1;
+    const ssize_t min_bytes = 8;
+    const char label[] = "udp  ";
+
+    if (NULL == packet)
+    {
+        (void)fprintf(stderr, "packet can not be NULL\n");
+        goto end;
+    }
+
+    if (bytes_left < min_bytes)
+    {
+        (void)fprintf(stderr, "packet is too small\n");
+        goto end;
+    }
+
+    parsed_bytes = min_bytes;
+
+    PrintHex(label, packet, (size_t)parsed_bytes);
 
 end:
     return parsed_bytes;
@@ -237,7 +292,7 @@ static int PrintHex(const char* label, const unsigned char* data, size_t length)
     for (size_t index = 0; index < length; ++index)
     {
         if (index % hex == 0)
-            printf("%s %04zx : ", label, index);
+            printf("%s  ", label);
 
         printf("%02x ", data[index]);
 
