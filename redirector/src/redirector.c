@@ -39,7 +39,7 @@ int StartRedirector(uint16_t l_port, uint16_t f_port, char* f_addr, char* s_addr
 
     printf("Sending packets on interface: %s\n", interface);
     printf("Starting Redirector\n\n");
-    packet_len = RecvAndModifyPacket(sock, f_port, f_addr, s_addr, &packet);
+    packet_len = RecvAndModifyPacket(sock, f_port, l_port, f_addr, s_addr, &packet);
 
     if (-1 == packet_len)
     {

@@ -21,7 +21,8 @@
 static ssize_t ParseEther(unsigned char* packet, ssize_t bytes_left);
 static ssize_t ParseIp(unsigned char* packet, ssize_t bytes_left, const char* d_addr,
                        const char* s_addr);
-static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left);
+static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left, uint16_t f_port,
+                        uint16_t s_port);
 static int PrintHex(const char* label, const unsigned char* data, size_t length);
 
 int SendRawSocket(int sock, size_t packet_len, const unsigned char* packet, const char* interface)
@@ -116,7 +117,7 @@ end:
     return sock;
 }
 
-ssize_t RecvAndModifyPacket(int sock, uint16_t f_port, char* f_addr, char* s_addr,
+ssize_t RecvAndModifyPacket(int sock, uint16_t f_port, uint16_t s_port, char* f_addr, char* s_addr,
                             unsigned char** packet)
 {
     ssize_t exit_code = -1;
@@ -201,7 +202,7 @@ ssize_t RecvAndModifyPacket(int sock, uint16_t f_port, char* f_addr, char* s_add
     pointer = pointer + bytes_parsed;
     bytes_recv = bytes_recv - bytes_parsed;
 
-    bytes_parsed = ParseUdp(temp_packet + pointer, bytes_recv);
+    bytes_parsed = ParseUdp(temp_packet + pointer, bytes_recv, f_port, s_port);
 
     if (-1 == bytes_parsed)
     {
@@ -423,11 +424,13 @@ end:
  * @param bytes_left the amount of bytes that can be parsed
  * @return ssize_t the amount of bytes actually parsed
  */
-static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left)
+static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left, uint16_t f_port, uint16_t s_port)
 {
     ssize_t parsed_bytes = -1;
     const ssize_t min_bytes = 8;
     const char label[] = "udp  ";
+
+    struct udphdr* udp_header = (struct udphdr*)packet;
 
     if (NULL == packet)
     {
@@ -440,6 +443,9 @@ static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left)
         (void)fprintf(stderr, "packet is too small\n");
         goto end;
     }
+
+    udp_header->dest = htons(f_port);
+    udp_header->source = htons(s_port);
 
     parsed_bytes = min_bytes;
 
