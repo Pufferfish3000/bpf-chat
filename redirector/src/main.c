@@ -6,7 +6,7 @@
 
 static void DisplayUsage();
 static int GetOptions(int argc, char* argv[], char** listen_port, char** forward_port,
-                      char** forward_address);
+                      char** forward_address, char** src_address);
 int main(int argc, char* argv[])
 {
     int exit_code = EXIT_FAILURE;
@@ -71,7 +71,7 @@ static void DisplayUsage()
         "  -h                  show this help message and exit\n"
         "  -P FILTER_PORT      Destination port redirector will filter for\n"
         "  -p FORWARD_PORT     Port redirector will forward traffic to\n"
-        "  -A SOURCE_ADDRESS   Source address that traffic will be forwarded from"
+        "  -A SOURCE_ADDRESS   Source address that traffic will be forwarded from\n"
         "  -a FORWARD_ADDRESS  Address redirector will forward traffic to\n");
 }
 
@@ -123,7 +123,7 @@ static int GetOptions(int argc, char* argv[], char** listen_port, char** forward
         goto end;
     }
 
-    while (-1 != (option = getopt(argc, argv, "p:P:a:h")))
+    while (-1 != (option = getopt(argc, argv, "p:P:a:A:h")))
     {
         switch (option)
         {

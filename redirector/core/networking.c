@@ -1,8 +1,11 @@
 #include <arpa/inet.h>
+#include <features.h>
+#include <ifaddrs.h>
 #include <linux/filter.h>
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
 #include <net/ethernet.h>
+#include <net/if.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
 #include <stdio.h>
@@ -21,19 +24,52 @@ static ssize_t ParseIp(unsigned char* packet, ssize_t bytes_left, const char* d_
 static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left);
 static int PrintHex(const char* label, const unsigned char* data, size_t length);
 
-int SendRawSocket(int sock, size_t packet_len, const unsigned char packet,
-                  const unsigned char interface)
+int SendRawSocket(int sock, size_t packet_len, const unsigned char* packet, const char* interface)
 {
     int exit_code = EXIT_FAILURE;
     struct sockaddr_ll device = {0};
+    unsigned int interface_index = 0;
+
+    if (NULL == packet)
+    {
+        (void)fprintf(stderr, "packet can not be NULL\n");
+        goto end;
+    }
+    if (NULL == interface)
+    {
+        (void)fprintf(stderr, "interface can not be NULL\n");
+        goto end;
+    }
+    if (packet_len <= 0)
+    {
+        (void)fprintf(stderr, "packet_len must be greater than 0\n");
+        goto end;
+    }
+    if (sock < 0)
+    {
+        (void)fprintf(stderr, "sock must be a valid socket\n");
+        goto end;
+    }
+
+    interface_index = if_nametoindex(interface);
+    if (0 == interface_index)
+    {
+        (void)fprintf(stderr, "Could not get interface index for: %s\n", interface);
+        goto end;
+    }
+
     device.sll_family = AF_PACKET;
     device.sll_protocol = htons(ETH_P_ALL);
-    device.sll_ifindex = if_nametoindex(interface);
+    device.sll_ifindex = (int)interface_index;
 
     if (-1 == sendto(sock, packet, packet_len, 0, (struct sockaddr*)&device, sizeof(device)))
     {
         perror("sendto failed");
     }
+
+    exit_code = EXIT_SUCCESS;
+
+end:
 
     return exit_code;
 }
@@ -80,13 +116,15 @@ end:
     return sock;
 }
 
-int RecvAndModifyPacket(int sock, uint16_t f_port, char* f_addr, char* s_addr,
-                        unsigned char** packet)
+ssize_t RecvAndModifyPacket(int sock, uint16_t f_port, char* f_addr, char* s_addr,
+                            unsigned char** packet)
 {
-    int exit_code = EXIT_FAILURE;
+    ssize_t exit_code = -1;
     ssize_t bytes_parsed = -1;
     ssize_t bytes_recv = -1;
     ssize_t pointer = 0;
+
+    (void)f_port;
 
     unsigned char* temp_packet = NULL;
     unsigned char* temp = NULL;
@@ -152,7 +190,7 @@ int RecvAndModifyPacket(int sock, uint16_t f_port, char* f_addr, char* s_addr,
     pointer = pointer + bytes_parsed;
     bytes_recv = bytes_recv - bytes_parsed;
 
-    bytes_parsed = ParseIp(temp_packet + pointer, bytes_recv);
+    bytes_parsed = ParseIp(temp_packet + pointer, bytes_recv, f_addr, s_addr);
 
     if (-1 == bytes_parsed)
     {
@@ -178,7 +216,9 @@ int RecvAndModifyPacket(int sock, uint16_t f_port, char* f_addr, char* s_addr,
     {
         PrintHex(label, temp_packet + pointer, (size_t)bytes_recv);
     }
-    exit_code = EXIT_SUCCESS;
+
+    exit_code = pointer + bytes_recv;
+    *packet = temp_packet;
 
     goto end;
 
@@ -294,6 +334,86 @@ static ssize_t ParseIp(unsigned char* packet, ssize_t bytes_left, const char* d_
 
 end:
     return parsed_bytes;
+}
+
+int GetInterface(const char* address, char** interface)
+{
+    int exit_code = EXIT_FAILURE;
+
+    unsigned int if_index = 0;
+    char* temp = NULL;
+    struct ifaddrs* ifaddr = NULL;
+    struct ifaddrs* ifa = NULL;
+    int found = 0;
+
+    if (NULL == address)
+    {
+        (void)fprintf(stderr, "address can not be NULL\n");
+        goto end;
+    }
+
+    if (NULL == interface || NULL != *interface)
+    {
+        (void)fprintf(stderr, "interface must be a NULL double pointer\n");
+        goto end;
+    }
+
+    if (getifaddrs(&ifaddr) == -1)
+    {
+        perror("getifaddrs");
+        goto end;
+    }
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
+    {
+        if (ifa->ifa_addr == NULL)
+            continue;
+        if (ifa->ifa_addr->sa_family == AF_INET)
+        {
+            char host[INET_ADDRSTRLEN];
+            if (inet_ntop(AF_INET, &((struct sockaddr_in*)ifa->ifa_addr)->sin_addr, host,
+                          sizeof(host)))
+            {
+                if (strcmp(host, address) == 0)
+                {
+                    if_index = if_nametoindex(ifa->ifa_name);
+                    found = 1;
+                    break;
+                }
+            }
+        }
+    }
+
+    freeifaddrs(ifaddr);
+
+    if (!found || 0 == if_index)
+    {
+        (void)fprintf(stderr, "Could not get interface index for address: %s\n", address);
+        goto end;
+    }
+
+    temp = calloc(IF_NAMESIZE, sizeof(*temp));
+    if (NULL == temp)
+    {
+        perror("calloc");
+        goto end;
+    }
+
+    if (NULL == if_indextoname(if_index, temp))
+    {
+        (void)fprintf(stderr, "Could not get interface name for address: %s\n", address);
+        goto clean;
+    }
+
+    *interface = temp;
+    exit_code = EXIT_SUCCESS;
+    goto end;
+
+clean:
+    NFREE(temp);
+
+end:
+    return exit_code;
 }
 
 /**

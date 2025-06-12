@@ -9,26 +9,58 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "common.h"
 #include "networking.h"
 #include "redirector.h"
 
 static int CreateUDPFilterSocket(uint16_t port);
 
-int StartRedirector(uint16_t l_port, uint16_t f_port, char* f_addr, char s_addr)
+int StartRedirector(uint16_t l_port, uint16_t f_port, char* f_addr, char* s_addr)
 {
     int exit_code = EXIT_FAILURE;
     int sock = -1;
     unsigned char* packet = NULL;
+    char* interface = NULL;
+    ssize_t packet_len = -1;
 
     sock = CreateUDPFilterSocket(l_port);
 
-    printf("Starting Redirector\n\n");
-
-    if (RecvAndModifyPacket(sock, f_port, f_addr))
+    if (-1 == sock)
     {
-        (void)fprintf(stderr, "Could not Recv Raw Packet\n");
+        (void)fprintf(stderr, "Could not create raw udp filter socket\n");
+        goto end;
     }
 
+    if (GetInterface(s_addr, &interface))
+    {
+        (void)fprintf(stderr, "Could not get interface for address: %s\n", s_addr);
+        goto end;
+    }
+
+    printf("Sending packets on interface: %s\n", interface);
+    printf("Starting Redirector\n\n");
+    packet_len = RecvAndModifyPacket(sock, f_port, f_addr, s_addr, &packet);
+
+    if (-1 == packet_len)
+    {
+        (void)fprintf(stderr, "Could not Recv and Modify Packet\n");
+        goto clean;
+    }
+
+    if (SendRawSocket(sock, (size_t)packet_len, packet, interface))
+    {
+        (void)fprintf(stderr, "Could not send raw socket\n");
+        goto clean;
+    }
+
+    printf("SENDING %s:%d --> %s:%d\n", s_addr, l_port, f_addr, f_port);
+
+clean:
+    NFREE(interface);
+    NFREE(packet);
+    close(sock);
+
+end:
     return exit_code;
 }
 
