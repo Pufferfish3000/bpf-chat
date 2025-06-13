@@ -22,9 +22,10 @@
 static ssize_t ParseEther(unsigned char* packet, ssize_t bytes_left);
 static ssize_t ParseIp(unsigned char* packet, ssize_t bytes_left, const char* d_addr,
                        const char* s_addr);
-static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left, uint16_t f_port,
-                        uint16_t s_port);
+static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left, uint16_t f_port, uint16_t s_port,
+                        struct ip* ip_header);
 static int PrintHex(const char* label, const unsigned char* data, size_t length);
+
 int GetInterface(const char* address, char** interface)
 {
     int exit_code = EXIT_FAILURE;
@@ -210,6 +211,8 @@ ssize_t RecvAndModifyPacket(int sock, uint16_t f_port, uint16_t s_port, char* f_
     unsigned char* temp_packet = NULL;
     unsigned char* temp = NULL;
 
+    struct ip* ip_ptr = NULL;
+
     const char label[] = "data ";
 
     if (NULL == f_addr)
@@ -279,10 +282,12 @@ ssize_t RecvAndModifyPacket(int sock, uint16_t f_port, uint16_t s_port, char* f_
         goto clean;
     }
 
+    ip_ptr = (struct ip*)(temp_packet + pointer);
+
     pointer = pointer + bytes_parsed;
     bytes_recv = bytes_recv - bytes_parsed;
 
-    bytes_parsed = ParseUdp(temp_packet + pointer, bytes_recv, f_port, s_port);
+    bytes_parsed = ParseUdp(temp_packet + pointer, bytes_recv, f_port, s_port, ip_ptr);
 
     if (-1 == bytes_parsed)
     {
@@ -432,7 +437,8 @@ end:
  * @param bytes_left the amount of bytes that can be parsed
  * @return ssize_t the amount of bytes actually parsed
  */
-static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left, uint16_t f_port, uint16_t s_port)
+static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left, uint16_t f_port, uint16_t s_port,
+                        struct ip* ip_header)
 {
     ssize_t parsed_bytes = -1;
     const ssize_t min_bytes = 8;
@@ -445,6 +451,11 @@ static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left, uint16_t f_po
         (void)fprintf(stderr, "packet can not be NULL\n");
         goto end;
     }
+    if (NULL == ip_header)
+    {
+        (void)fprintf(stderr, "ip_header can not be NULL\n");
+        goto end;
+    }
 
     if (bytes_left < min_bytes)
     {
@@ -454,6 +465,10 @@ static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left, uint16_t f_po
 
     udp_header->dest = htons(f_port);
     udp_header->source = htons(s_port);
+
+    udp_header->uh_sum = 0;
+    udp_header->uh_sum = udp_checksum(udp_header, ntohs(udp_header->uh_ulen),
+                                      ip_header->ip_src.s_addr, ip_header->ip_dst.s_addr);
 
     parsed_bytes = min_bytes;
 
