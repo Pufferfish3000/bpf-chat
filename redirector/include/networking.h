@@ -1,5 +1,6 @@
 #ifndef NETWORKING_H
 #define NETWORKING_H
+#include <linux/filter.h>
 #include <stdint.h>
 #include <sys/types.h>
 
