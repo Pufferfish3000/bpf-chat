@@ -16,7 +16,7 @@ def get_command_args() -> argparse.Namespace:
     parser.add_argument(
         "-L", "--log-file", default="Peer.log", help="Path to the log file"
     )
-    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     parser.add_argument(
         "-I",
         "--dip",
@@ -25,12 +25,12 @@ def get_command_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "-l",
+        "-d",
         "--dport",
         required=True,
     )
     parser.add_argument(
-        "-p",
+        "-s",
         "--sport",
         required=True,
     )

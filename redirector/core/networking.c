@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "checksum.h"
 #include "common.h"
 #include "networking.h"
 static ssize_t ParseEther(unsigned char* packet, ssize_t bytes_left);
@@ -24,6 +25,85 @@ static ssize_t ParseIp(unsigned char* packet, ssize_t bytes_left, const char* d_
 static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left, uint16_t f_port,
                         uint16_t s_port);
 static int PrintHex(const char* label, const unsigned char* data, size_t length);
+int GetInterface(const char* address, char** interface)
+{
+    int exit_code = EXIT_FAILURE;
+
+    unsigned int if_index = 0;
+    char* temp = NULL;
+    struct ifaddrs* ifaddr = NULL;
+    struct ifaddrs* ifa = NULL;
+    int found = 0;
+
+    if (NULL == address)
+    {
+        (void)fprintf(stderr, "address can not be NULL\n");
+        goto end;
+    }
+
+    if (NULL == interface || NULL != *interface)
+    {
+        (void)fprintf(stderr, "interface must be a NULL double pointer\n");
+        goto end;
+    }
+
+    if (getifaddrs(&ifaddr) == -1)
+    {
+        perror("getifaddrs");
+        goto end;
+    }
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
+    {
+        if (ifa->ifa_addr == NULL)
+            continue;
+        if (ifa->ifa_addr->sa_family == AF_INET)
+        {
+            char host[INET_ADDRSTRLEN];
+            if (inet_ntop(AF_INET, &((struct sockaddr_in*)ifa->ifa_addr)->sin_addr, host,
+                          sizeof(host)))
+            {
+                if (strcmp(host, address) == 0)
+                {
+                    if_index = if_nametoindex(ifa->ifa_name);
+                    found = 1;
+                    break;
+                }
+            }
+        }
+    }
+
+    freeifaddrs(ifaddr);
+
+    if (!found || 0 == if_index)
+    {
+        (void)fprintf(stderr, "Could not get interface index for address: %s\n", address);
+        goto end;
+    }
+
+    temp = calloc(IF_NAMESIZE, sizeof(*temp));
+    if (NULL == temp)
+    {
+        perror("calloc");
+        goto end;
+    }
+
+    if (NULL == if_indextoname(if_index, temp))
+    {
+        (void)fprintf(stderr, "Could not get interface name for address: %s\n", address);
+        goto clean;
+    }
+
+    *interface = temp;
+    exit_code = EXIT_SUCCESS;
+    goto end;
+
+clean:
+    NFREE(temp);
+
+end:
+    return exit_code;
+}
 
 int SendRawSocket(int sock, size_t packet_len, const unsigned char* packet, const char* interface)
 {
@@ -276,7 +356,7 @@ static ssize_t ParseIp(unsigned char* packet, ssize_t bytes_left, const char* d_
 
     ssize_t parsed_bytes = -1;
     const ssize_t min_bytes = 20;
-
+    uint16_t checksum = 0;
     const char label[] = "ip   ";
 
     struct in_addr src = {0};
@@ -332,89 +412,17 @@ static ssize_t ParseIp(unsigned char* packet, ssize_t bytes_left, const char* d_
 
     ip_headr->ip_src = src;
     ip_headr->ip_dst = dst;
+    ip_headr->ip_sum = 0;
+
+    checksum = ip_checksum(ip_headr, (size_t)parsed_bytes);
+    if (checksum == 0)
+    {
+        checksum = 0xFFFF;
+    }
+    ip_headr->ip_sum = checksum;
 
 end:
     return parsed_bytes;
-}
-
-int GetInterface(const char* address, char** interface)
-{
-    int exit_code = EXIT_FAILURE;
-
-    unsigned int if_index = 0;
-    char* temp = NULL;
-    struct ifaddrs* ifaddr = NULL;
-    struct ifaddrs* ifa = NULL;
-    int found = 0;
-
-    if (NULL == address)
-    {
-        (void)fprintf(stderr, "address can not be NULL\n");
-        goto end;
-    }
-
-    if (NULL == interface || NULL != *interface)
-    {
-        (void)fprintf(stderr, "interface must be a NULL double pointer\n");
-        goto end;
-    }
-
-    if (getifaddrs(&ifaddr) == -1)
-    {
-        perror("getifaddrs");
-        goto end;
-    }
-
-    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
-    {
-        if (ifa->ifa_addr == NULL)
-            continue;
-        if (ifa->ifa_addr->sa_family == AF_INET)
-        {
-            char host[INET_ADDRSTRLEN];
-            if (inet_ntop(AF_INET, &((struct sockaddr_in*)ifa->ifa_addr)->sin_addr, host,
-                          sizeof(host)))
-            {
-                if (strcmp(host, address) == 0)
-                {
-                    if_index = if_nametoindex(ifa->ifa_name);
-                    found = 1;
-                    break;
-                }
-            }
-        }
-    }
-
-    freeifaddrs(ifaddr);
-
-    if (!found || 0 == if_index)
-    {
-        (void)fprintf(stderr, "Could not get interface index for address: %s\n", address);
-        goto end;
-    }
-
-    temp = calloc(IF_NAMESIZE, sizeof(*temp));
-    if (NULL == temp)
-    {
-        perror("calloc");
-        goto end;
-    }
-
-    if (NULL == if_indextoname(if_index, temp))
-    {
-        (void)fprintf(stderr, "Could not get interface name for address: %s\n", address);
-        goto clean;
-    }
-
-    *interface = temp;
-    exit_code = EXIT_SUCCESS;
-    goto end;
-
-clean:
-    NFREE(temp);
-
-end:
-    return exit_code;
 }
 
 /**
