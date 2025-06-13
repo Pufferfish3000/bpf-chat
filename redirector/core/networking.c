@@ -466,8 +466,8 @@ static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left, uint16_t f_po
     udp_header->dest = htons(f_port);
     udp_header->source = htons(s_port);
 
-    udp_header->uh_sum = 0;
-    udp_header->uh_sum = udp_checksum(udp_header, ntohs(udp_header->uh_ulen),
+    udp_header->check = 0;
+    udp_header->check = udp_checksum(udp_header, ntohs(udp_header->len),
                                       ip_header->ip_src.s_addr, ip_header->ip_dst.s_addr);
 
     parsed_bytes = min_bytes;
