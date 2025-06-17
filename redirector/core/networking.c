@@ -192,7 +192,8 @@ end:
     return sock;
 }
 
-ssize_t RecvAndModifyPacket(int sock, uint16_t f_port, uint16_t s_port, char* f_addr, char* s_addr,
+ssize_t RecvAndModifyPacket(int sock, uint16_t f_port, uint16_t s_port,
+                            unsigned char** data_section, char* f_addr, char* s_addr,
                             unsigned char** packet)
 {
     ssize_t exit_code = -1;
@@ -295,6 +296,11 @@ ssize_t RecvAndModifyPacket(int sock, uint16_t f_port, uint16_t s_port, char* f_
     if (bytes_recv > 0)
     {
         PrintHex(label, temp_packet + pointer, (size_t)bytes_recv);
+    }
+
+    if (NULL != data_section)
+    {
+        *data_section = temp_packet + pointer;
     }
 
     exit_code = pointer + bytes_recv;

@@ -22,6 +22,27 @@ int StartRedirector(uint16_t l_port, uint16_t f_port, int raw_send, char* f_addr
     unsigned char* packet = NULL;
     char* interface = NULL;
     ssize_t packet_len = -1;
+    int udp_socket = -1;
+
+    if (raw_send)
+    {
+        exit_code = RawSendLoop(l_port, f_port, f_addr, s_addr);
+    }
+    else
+    {
+        exit_code = UdpSendLoop(l_port, f_port, f_addr, s_addr);
+    }
+
+    return exit_code;
+}
+
+static int RawSendLoop(uint16_t l_port, uint16_t f_port, char* f_addr, char* s_addr)
+{
+    int exit_code = EXIT_FAILURE;
+    int sock = -1;
+    unsigned char* packet = NULL;
+    char* interface = NULL;
+    ssize_t packet_len = -1;
 
     sock = CreateUDPFilterSocket(l_port);
 
@@ -39,7 +60,7 @@ int StartRedirector(uint16_t l_port, uint16_t f_port, int raw_send, char* f_addr
 
     printf("Sending packets on interface: %s\n", interface);
     printf("Starting Redirector\n\n");
-    packet_len = RecvAndModifyPacket(sock, f_port, l_port, f_addr, s_addr, &packet);
+    packet_len = RecvAndModifyPacket(sock, f_port, l_port, NULL, f_addr, s_addr, &packet);
 
     if (-1 == packet_len)
     {
@@ -59,6 +80,68 @@ clean:
     NFREE(interface);
     NFREE(packet);
     close(sock);
+
+end:
+    return exit_code;
+}
+
+static int UdpSendLoop(uint16_t l_port, uint16_t f_port, char* f_addr, char* s_addr)
+{
+    int exit_code = EXIT_FAILURE;
+    int bpf_sock = -1;
+    int udp_sock = -1;
+    unsigned char* data = NULL;
+
+    unsigned char* packet = NULL;
+    ssize_t packet_len = -1;
+    struct sockaddr_in dest_addr = {0};
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(f_port);
+
+    if (inet_pton(AF_INET, f_addr, &dest_addr.sin_addr) <= 0)
+    {
+        (void)fprintf(stderr, "Invalid address: %s\n", f_addr);
+        goto clean;
+    }
+    bpf_sock = CreateUDPFilterSocket(l_port);
+
+    if (-1 == bpf_sock)
+    {
+        (void)fprintf(stderr, "Could not create raw udp filter socket\n");
+        goto end;
+    }
+
+    udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (-1 == udp_sock)
+    {
+        (void)fprintf(stderr, "Could not create UDP socket\n");
+        goto clean;
+    }
+
+    printf("Starting Redirector\n\n");
+    packet_len = RecvAndModifyPacket(bpf_sock, f_port, l_port, &data, f_addr, s_addr, &packet);
+
+    if (-1 == packet_len)
+    {
+        (void)fprintf(stderr, "Could not Recv and Modify Packet\n");
+        goto clean;
+    }
+
+    if (NULL == data)
+    {
+        (void)fprintf(stderr, "Data section is NULL\n");
+        goto clean;
+    }
+    if (sendto(udp_sock, data, packet_len, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr)) < 0)
+    {
+        (void)fprintf(stderr, "Could not send UDP packet\n");
+        goto clean;
+    }
+    printf("SENDING %s:%d --> %s:%d\n", s_addr, l_port, f_addr, f_port);
+
+clean:
+    NFREE(packet);
+    close(bpf_sock);
 
 end:
     return exit_code;
