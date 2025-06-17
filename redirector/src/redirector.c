@@ -14,15 +14,11 @@
 #include "redirector.h"
 
 static int CreateUDPFilterSocket(uint16_t port);
-
+static int RawSendLoop(uint16_t l_port, uint16_t f_port, char* f_addr, char* s_addr);
+static int UdpSendLoop(uint16_t l_port, uint16_t f_port, char* f_addr, char* s_addr);
 int StartRedirector(uint16_t l_port, uint16_t f_port, int raw_send, char* f_addr, char* s_addr)
 {
     int exit_code = EXIT_FAILURE;
-    int sock = -1;
-    unsigned char* packet = NULL;
-    char* interface = NULL;
-    ssize_t packet_len = -1;
-    int udp_socket = -1;
 
     if (raw_send)
     {
@@ -132,7 +128,8 @@ static int UdpSendLoop(uint16_t l_port, uint16_t f_port, char* f_addr, char* s_a
         (void)fprintf(stderr, "Data section is NULL\n");
         goto clean;
     }
-    if (sendto(udp_sock, data, packet_len, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr)) < 0)
+    if (sendto(udp_sock, data, (size_t)packet_len, 0, (struct sockaddr*)&dest_addr,
+               sizeof(dest_addr)) < 0)
     {
         (void)fprintf(stderr, "Could not send UDP packet\n");
         goto clean;

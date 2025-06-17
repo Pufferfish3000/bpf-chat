@@ -317,7 +317,6 @@ end:
 int SendUDP(unsigned char* packet, size_t packet_len, int sock, struct sockaddr_in* addr)
 {
     int exit_code = EXIT_FAILURE;
-    struct sockaddr_in server_addr = {0};
 
     if (NULL == packet)
     {
@@ -331,8 +330,7 @@ int SendUDP(unsigned char* packet, size_t packet_len, int sock, struct sockaddr_
         goto end;
     }
 
-    if (sendto(sock, packet, packet_len, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) <
-        0)
+    if (sendto(sock, packet, packet_len, 0, (struct sockaddr*)addr, sizeof(struct sockaddr)) < 0)
     {
         perror("sendto failed");
         goto end;

@@ -6,7 +6,7 @@
 
 static void DisplayUsage();
 static int GetOptions(int argc, char* argv[], char** listen_port, char** forward_port,
-                      char** forward_address, char** src_address);
+                           char** forward_address, char** src_address, int* raw_send);
 int main(int argc, char* argv[])
 {
     int exit_code = EXIT_FAILURE;
@@ -20,7 +20,7 @@ int main(int argc, char* argv[])
     char* src_address = NULL;
     char* endptr = NULL;
 
-    if (GetOptions(argc, argv, &listen_port, &forward_port, &forward_address, &src_address))
+    if (GetOptions(argc, argv, &listen_port, &forward_port, &forward_address, &src_address, &raw_send))
     {
         DisplayUsage();
         goto end;
@@ -52,7 +52,8 @@ int main(int argc, char* argv[])
         goto end;
     }
 
-    exit_code = StartRedirector((uint16_t)l_port, (uint16_t)f_port, raw_send, forward_address, src_address);
+    exit_code =
+        StartRedirector((uint16_t)l_port, (uint16_t)f_port, raw_send, forward_address, src_address);
 end:
     return exit_code;
 }
