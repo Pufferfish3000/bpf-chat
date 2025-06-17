@@ -15,7 +15,7 @@
 
 static int CreateUDPFilterSocket(uint16_t port);
 
-int StartRedirector(uint16_t l_port, uint16_t f_port, char* f_addr, char* s_addr)
+int StartRedirector(uint16_t l_port, uint16_t f_port, int raw_send, char* f_addr, char* s_addr)
 {
     int exit_code = EXIT_FAILURE;
     int sock = -1;

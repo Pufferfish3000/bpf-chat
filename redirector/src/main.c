@@ -10,6 +10,7 @@ static int GetOptions(int argc, char* argv[], char** listen_port, char** forward
 int main(int argc, char* argv[])
 {
     int exit_code = EXIT_FAILURE;
+    int raw_send = 0;  // disabled
     const int base_10 = 10;
     long l_port = -1;
     long f_port = -1;
@@ -51,7 +52,7 @@ int main(int argc, char* argv[])
         goto end;
     }
 
-    exit_code = StartRedirector((uint16_t)l_port, (uint16_t)f_port, forward_address, src_address);
+    exit_code = StartRedirector((uint16_t)l_port, (uint16_t)f_port, raw_send, forward_address, src_address);
 end:
     return exit_code;
 }
@@ -69,6 +70,7 @@ static void DisplayUsage()
         "Send a shell command to the configured agent.\n\n"
         "required flags:\n"
         "  -h                  show this help message and exit\n"
+        "  -r                  Send packets using raw sockets\n"
         "  -P FILTER_PORT      Destination port redirector will filter for\n"
         "  -p FORWARD_PORT     Port redirector will forward traffic to\n"
         "  -A SOURCE_ADDRESS   Source address that traffic will be forwarded from\n"
@@ -86,7 +88,7 @@ static void DisplayUsage()
  * @return int EXIT_SUCCESS on success, EXIT_FAILURE on failure.
  */
 static int GetOptions(int argc, char* argv[], char** listen_port, char** forward_port,
-                      char** forward_address, char** src_address)
+                      char** forward_address, char** src_address, int* raw_send)
 {
     int exit_code = EXIT_SUCCESS;
     const int enabled = 1;
@@ -147,6 +149,10 @@ static int GetOptions(int argc, char* argv[], char** listen_port, char** forward
             case 'h':
                 exit_code = EXIT_FAILURE;
                 help = enabled;  // was called
+                break;
+
+            case 'r':
+                *raw_send = enabled;  // was called
                 break;
 
             case '?':
