@@ -15,4 +15,6 @@ ssize_t RecvAndModifyPacket(int sock, uint16_t f_port, uint16_t s_port, char* f_
                             unsigned char** packet);
 int SendRawSocket(int sock, size_t packet_len, const unsigned char* packet, const char* interface);
 int GetInterface(const char* address, char** interface);
+int CreateUdpSocket();
+int SendUDP(unsigned char* packet, size_t packet_len, int sock, struct sockaddr_in* addr);
 #endif /*NETWORKING_H*/

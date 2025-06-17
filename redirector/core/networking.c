@@ -16,10 +16,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "rawparser.h"
 #include "common.h"
 #include "networking.h"
-
+#include "rawparser.h"
 
 int GetInterface(const char* address, char** interface)
 {
@@ -307,4 +306,48 @@ clean:
     NFREE(temp_packet);
 end:
     return exit_code;
+}
+
+int SendUDP(unsigned char* packet, size_t packet_len, int sock, struct sockaddr_in* addr)
+{
+    int exit_code = EXIT_FAILURE;
+    struct sockaddr_in server_addr = {0};
+
+    if (NULL == packet)
+    {
+        (void)fprintf(stderr, "packet can not be NULL\n");
+        goto end;
+    }
+
+    if (packet_len <= 0)
+    {
+        (void)fprintf(stderr, "packet_len must be greater than 0\n");
+        goto end;
+    }
+
+    if (sendto(sock, packet, packet_len, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) <
+        0)
+    {
+        perror("sendto failed");
+        goto end;
+    }
+
+    exit_code = EXIT_SUCCESS;
+
+end:
+    return exit_code;
+}
+
+int CreateUdpSocket()
+{
+    int sock = -1;
+
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0)
+    {
+        perror("Could not create UDP socket");
+        return -1;
+    }
+
+    return sock;
 }
