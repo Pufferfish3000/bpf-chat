@@ -1,3 +1,3 @@
 # BPF CHAT
 
-Ignore things like firewalls and chat away!
+Firewall bypass proof of concept

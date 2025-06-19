@@ -18,12 +18,87 @@
 
 #include "common.h"
 #include "networking.h"
-static ssize_t ParseEther(unsigned char* packet, ssize_t bytes_left);
-static ssize_t ParseIp(unsigned char* packet, ssize_t bytes_left, const char* d_addr,
-                       const char* s_addr);
-static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left, uint16_t f_port,
-                        uint16_t s_port);
-static int PrintHex(const char* label, const unsigned char* data, size_t length);
+#include "rawparser.h"
+
+int GetInterface(const char* address, char** interface)
+{
+    int exit_code = EXIT_FAILURE;
+
+    unsigned int if_index = 0;
+    char* temp = NULL;
+    struct ifaddrs* ifaddr = NULL;
+    struct ifaddrs* ifa = NULL;
+    int found = 0;
+
+    if (NULL == address)
+    {
+        (void)fprintf(stderr, "address can not be NULL\n");
+        goto end;
+    }
+
+    if (NULL == interface || NULL != *interface)
+    {
+        (void)fprintf(stderr, "interface must be a NULL double pointer\n");
+        goto end;
+    }
+
+    if (getifaddrs(&ifaddr) == -1)
+    {
+        perror("getifaddrs");
+        goto end;
+    }
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
+    {
+        if (ifa->ifa_addr == NULL)
+            continue;
+        if (ifa->ifa_addr->sa_family == AF_INET)
+        {
+            char host[INET_ADDRSTRLEN];
+            if (inet_ntop(AF_INET, &((struct sockaddr_in*)ifa->ifa_addr)->sin_addr, host,
+                          sizeof(host)))
+            {
+                if (strcmp(host, address) == 0)
+                {
+                    if_index = if_nametoindex(ifa->ifa_name);
+                    found = 1;
+                    break;
+                }
+            }
+        }
+    }
+
+    freeifaddrs(ifaddr);
+
+    if (!found || 0 == if_index)
+    {
+        (void)fprintf(stderr, "Could not get interface index for address: %s\n", address);
+        goto end;
+    }
+
+    temp = calloc(IF_NAMESIZE, sizeof(*temp));
+    if (NULL == temp)
+    {
+        perror("calloc");
+        goto end;
+    }
+
+    if (NULL == if_indextoname(if_index, temp))
+    {
+        (void)fprintf(stderr, "Could not get interface name for address: %s\n", address);
+        goto clean;
+    }
+
+    *interface = temp;
+    exit_code = EXIT_SUCCESS;
+    goto end;
+
+clean:
+    NFREE(temp);
+
+end:
+    return exit_code;
+}
 
 int SendRawSocket(int sock, size_t packet_len, const unsigned char* packet, const char* interface)
 {
@@ -117,7 +192,8 @@ end:
     return sock;
 }
 
-ssize_t RecvAndModifyPacket(int sock, uint16_t f_port, uint16_t s_port, char* f_addr, char* s_addr,
+ssize_t RecvAndModifyPacket(int sock, uint16_t f_port, uint16_t s_port,
+                            unsigned char** data_section, char* f_addr, char* s_addr,
                             unsigned char** packet)
 {
     ssize_t exit_code = -1;
@@ -129,6 +205,8 @@ ssize_t RecvAndModifyPacket(int sock, uint16_t f_port, uint16_t s_port, char* f_
 
     unsigned char* temp_packet = NULL;
     unsigned char* temp = NULL;
+
+    struct ip* ip_ptr = NULL;
 
     const char label[] = "data ";
 
@@ -199,10 +277,12 @@ ssize_t RecvAndModifyPacket(int sock, uint16_t f_port, uint16_t s_port, char* f_
         goto clean;
     }
 
+    ip_ptr = (struct ip*)(temp_packet + pointer);
+
     pointer = pointer + bytes_parsed;
     bytes_recv = bytes_recv - bytes_parsed;
 
-    bytes_parsed = ParseUdp(temp_packet + pointer, bytes_recv, f_port, s_port);
+    bytes_parsed = ParseUdp(temp_packet + pointer, bytes_recv, f_port, s_port, ip_ptr);
 
     if (-1 == bytes_parsed)
     {
@@ -218,6 +298,11 @@ ssize_t RecvAndModifyPacket(int sock, uint16_t f_port, uint16_t s_port, char* f_
         PrintHex(label, temp_packet + pointer, (size_t)bytes_recv);
     }
 
+    if (NULL != data_section)
+    {
+        *data_section = temp_packet + pointer;
+    }
+
     exit_code = pointer + bytes_recv;
     *packet = temp_packet;
 
@@ -229,264 +314,44 @@ end:
     return exit_code;
 }
 
-/**
- * @brief Parses the ethernet header
- * 
- * @param packet pointer to the packet at the start of the ethernet
- * @param bytes_left the amount of bytes that can be parsed
- * @return ssize_t the amount of bytes actually parsed
- */
-static ssize_t ParseEther(unsigned char* packet, ssize_t bytes_left)
-{
-    ssize_t parsed_bytes = -1;
-    const int eth_sz = 14;
-    const char label[] = "ether";
-
-    if (NULL == packet)
-    {
-        (void)fprintf(stderr, "packet can not be NULL\n");
-        goto end;
-    }
-
-    if (bytes_left < eth_sz)
-    {
-        (void)fprintf(stderr, "packet is too small\n");
-        goto end;
-    }
-
-    PrintHex(label, packet, (size_t)eth_sz);
-
-    parsed_bytes = eth_sz;
-    goto end;
-
-end:
-    return parsed_bytes;
-}
-
-/**
- * @brief Parses the IP header
- * 
- * @param packet pointer to the packet at the start of IP
- * @param bytes_left the amount of bytes that can be parsed
- * @return ssize_t the amount of bytes actually parsed
- */
-static ssize_t ParseIp(unsigned char* packet, ssize_t bytes_left, const char* d_addr,
-                       const char* s_addr)
-{
-
-    ssize_t parsed_bytes = -1;
-    const ssize_t min_bytes = 20;
-
-    const char label[] = "ip   ";
-
-    struct in_addr src = {0};
-    struct in_addr dst = {0};
-
-    struct ip* ip_headr = (struct ip*)packet;
-
-    if (NULL == packet)
-    {
-        (void)fprintf(stderr, "packet can not be NULL\n");
-        goto end;
-    }
-
-    if (bytes_left < min_bytes)
-    {
-        (void)fprintf(stderr, "packet is too small\n");
-        goto end;
-    }
-
-    if (ip_headr->ip_v != 4)
-    {
-        (void)fprintf(stderr, "field %d should be 4\n", ip_headr->ip_v);
-        goto end;
-    }
-
-    if (ip_headr->ip_hl < 5)
-    {
-        (void)fprintf(stderr, "Invalid IP header length: %d\n", ip_headr->ip_hl);
-        goto end;
-    }
-
-    parsed_bytes = (ssize_t)ip_headr->ip_hl * 4;
-
-    if (parsed_bytes > bytes_left)
-    {
-        (void)fprintf(stderr, "ip data does not reflect bytes recv\n");
-        goto end;
-    }
-
-    PrintHex(label, packet, (size_t)parsed_bytes);
-
-    if (inet_aton(s_addr, &src) == 0)
-    {
-        (void)fprintf(stderr, "Invalid source IP: %s\n", s_addr);
-        goto end;
-    }
-
-    if (inet_aton(d_addr, &dst) == 0)
-    {
-        (void)fprintf(stderr, "Invalid destination IP: %s\n", d_addr);
-        goto end;
-    }
-
-    ip_headr->ip_src = src;
-    ip_headr->ip_dst = dst;
-
-end:
-    return parsed_bytes;
-}
-
-int GetInterface(const char* address, char** interface)
+int SendUDP(unsigned char* packet, size_t packet_len, int sock, struct sockaddr_in* addr)
 {
     int exit_code = EXIT_FAILURE;
 
-    unsigned int if_index = 0;
-    char* temp = NULL;
-    struct ifaddrs* ifaddr = NULL;
-    struct ifaddrs* ifa = NULL;
-    int found = 0;
-
-    if (NULL == address)
+    if (NULL == packet)
     {
-        (void)fprintf(stderr, "address can not be NULL\n");
+        (void)fprintf(stderr, "packet can not be NULL\n");
         goto end;
     }
 
-    if (NULL == interface || NULL != *interface)
+    if (packet_len <= 0)
     {
-        (void)fprintf(stderr, "interface must be a NULL double pointer\n");
+        (void)fprintf(stderr, "packet_len must be greater than 0\n");
         goto end;
     }
 
-    if (getifaddrs(&ifaddr) == -1)
+    if (sendto(sock, packet, packet_len, 0, (struct sockaddr*)addr, sizeof(struct sockaddr)) < 0)
     {
-        perror("getifaddrs");
+        perror("sendto failed");
         goto end;
     }
 
-    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
-    {
-        if (ifa->ifa_addr == NULL)
-            continue;
-        if (ifa->ifa_addr->sa_family == AF_INET)
-        {
-            char host[INET_ADDRSTRLEN];
-            if (inet_ntop(AF_INET, &((struct sockaddr_in*)ifa->ifa_addr)->sin_addr, host,
-                          sizeof(host)))
-            {
-                if (strcmp(host, address) == 0)
-                {
-                    if_index = if_nametoindex(ifa->ifa_name);
-                    found = 1;
-                    break;
-                }
-            }
-        }
-    }
-
-    freeifaddrs(ifaddr);
-
-    if (!found || 0 == if_index)
-    {
-        (void)fprintf(stderr, "Could not get interface index for address: %s\n", address);
-        goto end;
-    }
-
-    temp = calloc(IF_NAMESIZE, sizeof(*temp));
-    if (NULL == temp)
-    {
-        perror("calloc");
-        goto end;
-    }
-
-    if (NULL == if_indextoname(if_index, temp))
-    {
-        (void)fprintf(stderr, "Could not get interface name for address: %s\n", address);
-        goto clean;
-    }
-
-    *interface = temp;
     exit_code = EXIT_SUCCESS;
-    goto end;
-
-clean:
-    NFREE(temp);
 
 end:
     return exit_code;
 }
 
-/**
- * @brief Parses the UDP header
- * 
- * @param packet pointer to the packet at the start of UDP
- * @param bytes_left the amount of bytes that can be parsed
- * @return ssize_t the amount of bytes actually parsed
- */
-static ssize_t ParseUdp(unsigned char* packet, ssize_t bytes_left, uint16_t f_port, uint16_t s_port)
+int CreateUdpSocket()
 {
-    ssize_t parsed_bytes = -1;
-    const ssize_t min_bytes = 8;
-    const char label[] = "udp  ";
+    int sock = -1;
 
-    struct udphdr* udp_header = (struct udphdr*)packet;
-
-    if (NULL == packet)
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0)
     {
-        (void)fprintf(stderr, "packet can not be NULL\n");
-        goto end;
+        perror("Could not create UDP socket");
+        return -1;
     }
 
-    if (bytes_left < min_bytes)
-    {
-        (void)fprintf(stderr, "packet is too small\n");
-        goto end;
-    }
-
-    udp_header->dest = htons(f_port);
-    udp_header->source = htons(s_port);
-
-    parsed_bytes = min_bytes;
-
-    PrintHex(label, packet, (size_t)parsed_bytes);
-
-end:
-    return parsed_bytes;
-}
-
-static int PrintHex(const char* label, const unsigned char* data, size_t length)
-{
-    int exit_code = EXIT_FAILURE;
-    const size_t hex = 16;
-    size_t index = 0;
-
-    if (NULL == data)
-    {
-        (void)fprintf(stderr, "data can not be NULL\n");
-        goto end;
-    }
-
-    if (NULL == label)
-    {
-        (void)fprintf(stderr, "label can not be NULL\n");
-        goto end;
-    }
-
-    for (index = 0; index < length; ++index)
-    {
-        if (index % hex == 0)
-            printf("%s  ", label);
-
-        printf("%02x ", data[index]);
-
-        if ((index + 1) % hex == 0)
-            printf("\n");
-    }
-
-    if (length % hex != 0)
-        printf("\n");
-
-end:
-    return exit_code;
+    return sock;
 }
